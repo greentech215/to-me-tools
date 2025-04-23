@@ -1,0 +1,174 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { motion } from 'framer-motion';
+import { Trash2, CheckCircle, CalendarClock, Repeat, StickyNote, Bell, Filter, FileDown, RefreshCcw } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+
+const PRIORITIES = ['Alta', 'Média', 'Baixa'];
+const COLORS = ['#EF4444', '#F59E0B', '#10B981'];
+
+export default function TaskList() {
+  const [tasks, setTasks] = useState([]);
+  const [newTask, setNewTask] = useState('');
+  const [priority, setPriority] = useState('Média');
+  const [note, setNote] = useState('');
+  const [notes, setNotes] = useState([]);
+  const [reminderTime, setReminderTime] = useState('');
+  const [recurrentTasks, setRecurrentTasks] = useState([]);
+  const [newRecurrentTask, setNewRecurrentTask] = useState('');
+  const [filterPriority, setFilterPriority] = useState('Todas');
+  const [filterStatus, setFilterStatus] = useState('Todas');
+
+  useEffect(() => {
+    const savedTasks = localStorage.getItem('pcp_tasks');
+    const savedNotes = localStorage.getItem('pcp_notes');
+    const savedRecurrent = localStorage.getItem('pcp_recurrent');
+    if (savedTasks) setTasks(JSON.parse(savedTasks));
+    if (savedNotes) setNotes(JSON.parse(savedNotes));
+    if (savedRecurrent) setRecurrentTasks(JSON.parse(savedRecurrent));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('pcp_tasks', JSON.stringify(tasks));
+  }, [tasks]);
+
+  useEffect(() => {
+    localStorage.setItem('pcp_notes', JSON.stringify(notes));
+  }, [notes]);
+
+  useEffect(() => {
+    localStorage.setItem('pcp_recurrent', JSON.stringify(recurrentTasks));
+  }, [recurrentTasks]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!reminderTime) return;
+      const now = new Date();
+      const [hr, min] = reminderTime.split(':');
+      if (now.getHours() === parseInt(hr) && now.getMinutes() === parseInt(min)) {
+        alert('⏰ Hora do lembrete!');
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [reminderTime]);
+
+  const addTask = () => {
+    if (!newTask.trim()) return;
+    const task = {
+      id: Date.now(),
+      text: newTask,
+      priority,
+      done: false,
+      date: new Date().toISOString().slice(0, 10)
+    };
+    setTasks([task, ...tasks]);
+    setNewTask('');
+  };
+
+  const addRecurrentTask = () => {
+    if (!newRecurrentTask.trim()) return;
+    setRecurrentTasks([{ id: Date.now(), text: newRecurrentTask }, ...recurrentTasks]);
+    setNewRecurrentTask('');
+  };
+
+  const addNote = () => {
+    if (!note.trim()) return;
+    setNotes([{ id: Date.now(), text: note }, ...notes]);
+    setNote('');
+  };
+
+  const toggleDone = (id) => {
+    setTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  };
+
+  const deleteTask = (id) => {
+    setTasks(tasks.filter(t => t.id !== id));
+  };
+
+  const getFilteredTasks = () => {
+    return tasks.filter(t => {
+      const priorityMatch = filterPriority === 'Todas' || t.priority === filterPriority;
+      const statusMatch = filterStatus === 'Todas' || (filterStatus === 'Concluídas' ? t.done : !t.done);
+      return t.date === today && priorityMatch && statusMatch;
+    });
+  };
+
+  const getTasksByDate = (date) => tasks.filter(t => t.date === date);
+  const getTasksByMonth = (month) => tasks.filter(t => t.date?.startsWith(month));
+
+  const exportCSV = (data, filename) => {
+    const csvRows = [
+      ['ID', 'Tarefa', 'Prioridade', 'Concluída', 'Data'],
+      ...data.map(t => [t.id, t.text, t.priority, t.done ? 'Sim' : 'Não', t.date])
+    ];
+    const csvContent = csvRows.map(e => e.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filename}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const generateTodayTasks = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const newTasks = recurrentTasks.map(t => ({
+      id: Date.now() + Math.random(),
+      text: t.text,
+      priority: 'Média',
+      done: false,
+      date: today
+    }));
+    setTasks([...newTasks, ...tasks]);
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const thisMonth = new Date().toISOString().slice(0, 7);
+
+  const tasksByPriority = PRIORITIES.map(p => ({
+    name: p,
+    value: getTasksByMonth(thisMonth).filter(t => t.priority === p).length
+  }));
+
+  const completedByDay = Array.from(new Set(tasks.map(t => t.date))).map(date => ({
+    date,
+    done: tasks.filter(t => t.date === date && t.done).length
+  }));
+
+  return (
+    <div className="p-4 max-w-4xl mx-auto space-y-6">
+      {/* ... (todo o código anterior permanece igual) */}
+
+      {/* Gráficos Visuais */}
+      <div>
+        <h2 className="text-xl font-semibold mt-4">📈 Visuais do Mês</h2>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={tasksByPriority} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                {tasksByPriority.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="h-64 mt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={completedByDay}>
+              <XAxis dataKey="date" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Bar dataKey="done" fill="#3B82F6" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
